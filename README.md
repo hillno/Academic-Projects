@@ -1,0 +1,1 @@
+The files attatched in this repository are a collection of individual projects that were completed throughout my time at Luther College as an undergrad. Each project was completed successfully and helps illustrate my coding thought processes and skills with any type of problem.
