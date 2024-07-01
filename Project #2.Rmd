@@ -1,0 +1,335 @@
+---
+title: 'Project #2 - NFL Field Goal Data'
+author: "Ava Holland, Noah Hill, Anna Thomley"
+date: "2022-12-12"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+## Abstract
+
+This data set contains the results of all NFL regular season field goal attempts for the 2008 season. The goal of our analysis is to find the best logistic regression model using these predictor variables:
+* distance
+* qtr (what quarter they are in)
+* togo (yards to go until first down)
+* ydline (what yard line the kicking team is kicking on)
+* offscore (what the kicking team's score is)
+* defscore (what the defensive team's score is)
+* timerem (time remaining in seconds in the game)
+
+Our model could potential be used to predict if a field goal will be made or not.
+
+
+Research Questions:
+* Is a team more likely to kick a field goal before or after half time?
+* Is there a correlation between distance and made field goals?
+* Which quarter are the teams most likely to make a field goal?
+
+## Data Characteristics
+
+
+We gathered this data from users.stat.ufl.edu. It has data of 1,039 different field goal attempts from different NFL regular season games. There were two rows in this data set that were incomplete, therefore we looked at 1,037 rows of data. The variables are:
+
+* Date of Game
+* Away Team
+* Home Team
+* Quarter (5 = overtime)
+* Minutes Remaining
+* Seconds Remaining (added to minutes)
+* Team Kicking Field Goal
+* Defending Team
+* Down
+* Yards to Go for 1st down
+* Kicker (ID number)
+* Yard line for Kicking Team
+* Kicker's Name
+* Distance in yards
+* Homekick (1 = kicker is at home, 0 = kicker is away)
+* Kickdiff (+ = kicking team is in the lead, - = kicking team is in deficit, prior to the kick)
+* Time remaining in Seconds (negative = overtime)
+* Offscore (kicking team's score prior to kick)
+* Defscore (defense team's score prior to kick)
+* Season (2008)
+* Good (1 = Success, 0 = Miss)
+* Missed (1 = not blocked, 0 = ow)
+* Blocked (1 = blocked, 0 = ow)
+
+# Read Data
+```{r}
+#Read the excel file
+#library(readxl)
+#fldata0 <- read_excel("nfl2008_fga.xlsx")
+#dim(nfldata0)
+#nfldata = nfldata[complete.cases(nfldata0),]
+#dim(nfldata)
+```
+
+# Exploratory Analysis
+
+## Distance
+```{r}
+nfldata = nfldata[complete.cases(nfldata),]
+dim(nfldata)
+hist (nfldata$distance, xlab = "Distance, yards")
+```
+
+## ToGo
+```{r}
+hist (nfldata$togo, xlab = "Yards to go for a 1st down")
+```
+
+## Quarter
+```{r}
+barplot (table(nfldata$qtr), xlab = "Quarter", ylab = "# of Occurences")
+```
+
+## Yard Line
+```{r}
+hist (nfldata$ydline, xlab = "Yard Line of Kicking Team")
+boxplot (nfldata$ydline)
+```
+
+## Offensive Score
+```{r}
+hist(nfldata$offscore, xlab = "Offensive Score")
+```
+
+## Defensive Score
+```{r}
+hist(nfldata$defscore, xlab = "Defensive Score")
+```
+
+## Time Remaining
+```{r}
+hist(nfldata$timerem, xlab = "Time Remaining in Game (in seconds)")
+```
+
+None of the predictor variables require a transformation.
+
+```{r}
+library(vcd)
+library(MASS)
+
+table1 = xtabs(~ GOOD + distance, data = nfldata)
+table1
+
+table2 = xtabs(~ GOOD + togo, data = nfldata)
+table2
+
+table3 = xtabs(~ GOOD + qtr, data = nfldata)
+table3
+
+table4 = xtabs(~ GOOD + ydline, data = nfldata)
+table4
+
+table5 = xtabs(~ GOOD + offscore, data = nfldata)
+table5
+
+table6 = xtabs(~ GOOD + defscore, data = nfldata)
+table6
+
+table7 = xtabs(~ GOOD + timerem, data = nfldata)
+table7
+```
+
+In the qtr two way frequency table we notice that there is 214 field goal attempts in quarter 1, 373 in quarter 2, 182 in quarter 3, 255 in quarter 4, and 13 in overtime.  Quarter 2 seems to be when teams tend to go for a field goal the most.
+
+## First-Order Logistic Regression Model
+```{r}
+fit1 = glm(as.factor(GOOD) ~ distance + as.factor(qtr) + togo + ydline + offscore + defscore + timerem, family = binomial, data = nfldata)
+summary(fit1)
+
+exp (fit1$coefficients)
+
+#Confidence Intervals
+exp (confint(fit1))
+```
+
+In our first order model fit there were no significant predictors which suggests no further analysis with odd ratios. Additionally, all of the 95% confident intervals for our predictors included 1 which furthers this point of none of our predictor variables being statistically significant.
+
+# Jitter Plot of Predictor Variables
+```{r}
+library (tidyr)
+library (ggplot2)
+library (dplyr)
+hp.stack = nfldata [, c(4, 10, 12, 14, 15:17, 21)] %>% 
+  pivot_longer (!GOOD, names_to = "Predictor.Name", values_to = "Predictor.Value")
+hp.stack$GOOD.jt = jitter (hp.stack$GOOD, 0.2)
+
+qplot (Predictor.Value, GOOD.jt, data=hp.stack) + 
+  facet_wrap(~Predictor.Name, scales = 'free_x') +
+  geom_smooth (method = "loess", se=F)
+```
+
+In the jitter plots above none of them suggest a good initial fit.  This is due to much overlap of the points between each y value of 0 and 1.  The smoothing spline in the graphs of ydline and distance show the best fit out of all of the plots because of their one outlier.
+
+## Residual Plot of First-Order Model
+```{r}
+plot (fit1, which=1)
+```
+
+The residual plot above for our first order model looks reasonable. The fitted lowess line is very flat and close and touching zero. There are a few oultiers that we will look into later.
+
+## Cook's Distance
+```{r}
+plot(fit1, which=5)
+```
+
+In the Cook's distance plot, there are still obvious leverage issues on the X-axis (points 1037 and 1036). There are also no Cook's distance values above the cutoff of 0.5.
+
+## Check for Multicollinearlity
+```{r}
+car::vif(fit1)
+```
+
+The variables of distance, qtr, ydline, and timerem all have VIF values greater than five which suggest they are all highly correlated.  The variables of togo, offscore, and defscore all have values less than five which suggest they are not highly correlated predictors.
+
+## Model Selection
+# Stepwise Regression on the First-Order Model
+```{r}
+step1 = step (fit1, direction = 'both')
+summary (step1)
+```
+
+The AIC step-wise regression function on the first order model removed all predictors expect for distance. So we will ultimately keep all of our predictor variables in our final model. 
+
+## Fit model with interactions
+```{r}
+nfldata$distance.c = nfldata$distance - mean(nfldata$distance)
+fit2 = glm(as.factor(GOOD) ~ (distance + as.factor(qtr) + togo + ydline + offscore + defscore + timerem)^2, family = binomial, data = nfldata)
+summary(fit2)
+
+## Stepwise on Regression
+```{r}
+sf2 = step(fit2, direction = 'both')
+```
+
+Based on our initial first order model fit with interactions, the only significant interactions and variables to remain after step wise regression are offscore:defscore, offscore:timerem, and distance. We are not surprised that offensive score and defensive score were left as an interaction because these two variables have a perfect correlation with each other. This step wise lead us to create our final model with distance + offscore + defscore + timerem + offscore:defscore + offscore:timerem since those were the variables left.
+
+# Final Model
+```{r}
+summary(sf2)
+```
+
+For our final model, our most significant predictors were distance, defscore, offscore, timerem, and offscore:defscore because their p-values are all less than 0.05.  Their standards errors are 1.255e-02, 2.757e-02, 4.300e-02, 2.338e-04, and 1.589e-03 respectfully.  It is important to note that this final model is better based on AIC. The final AIC value was 691.6 compared to the earlier model's AIC value of 746.95.
+
+## Odds Ratios and Confidence Intervals
+```{r}
+cbind.data.frame (exp.beta = exp (sf2$coefficients),
+                     exp (as.data.frame (confint(sf2))))
+```
+
+We are 95% confident that distance influences if a field goal is made or missed, by as little as a factor of 0.8635369 or as much as a factor of 0.8635369.
+
+## Predicted Probabilities w/Confidence and Prediction Intervals
+```{r}
+preds = predict (sf2, se.fit = T)
+pred.df = cbind.data.frame (nfldata, as.data.frame (preds))
+
+pred.df$lwr = pred.df$fit - 1.96 * pred.df$se.fit
+pred.df$upr = pred.df$fit + 1.96 * pred.df$se.fit
+
+pred.df$fit.pr = round (exp (pred.df$fit) / (1 + exp (pred.df$fit)), 3)
+pred.df$lwr.pr = round (exp (pred.df$lwr) / (1 + exp (pred.df$lwr)), 3)
+pred.df$upr.pr = round (exp (pred.df$upr) / (1 + exp (pred.df$upr)), 3)
+
+# Selected distance values ranging from 20-39 yards
+pred.df [c(26, 31), c(380, 540)]
+
+# Selected distance values ranging from 40-59 yards
+pred.df [c(84, 48, 41, 51, 74, 58), c(2,5:7,14:16)]
+
+```
+
+*interactions
+
+## Model Diagnostics
+```{r}
+#Likelihood Ratio Test - want a small p value
+pchisq (sf2$null.deviance - sf2$deviance,
+        sf2$df.null - sf2$df.residual, lower.tail = F)
+
+#Goodness of Fit Test
+pchisq (sf2$deviance, sf2$df.residual, lower.tail = F)
+```
+#ask on how to interpret it
+ 
+# Residual Plots
+## Deviance Residuals vs. Fitted Logit Values
+```{r}
+plot(sf2, which=1)
+```
+
+The Residuals vs Fitted plot provides evidence of a reasonable fit, since the red lowness line is flat and is almost perfect to equalling 0. There is one outlier (point 503) but it doesn't seem to impact the lowness line.
+
+## Cook's Distance Plot
+```{r}
+plot(sf2, which=5)
+
+#Scatterplot Matrix -- #ask about cutoff color
+plot(nfldata[,c("offscore","defscore","timerem","distance")],
+     col=ifelse(hatvalues(sf2)>lev.cut,2,1))
+```
+*interpret
+
+## ROC Curve
+```{r}
+par (mfrow=c(1,1))
+library(ROCR)
+pred1 <- prediction(sf2$fitted.values, sf2$y)
+perf1 <- performance(pred1,"tpr","fpr")
+auc1 <- performance(pred1,"auc")@y.values[[1]]
+auc1
+plot(perf1, lwd=2, col=2)
+abline(0,1)
+legend(0.6, 0.3, c(paste ("AUC=", round (auc1, 4), sep="")),   lwd=2, col=2)
+
+auc.table = cbind.data.frame(cutoff=pred1@cutoffs,
+                             tp=pred1@tp, fp=pred1@fp, tn=pred1@tn,
+                             fn=pred1@fn)
+
+names(auc.table) = c("Cutoff", "TP", "FP", "TN", "FN")
+auc.table$sensitivity = auc.table$TP / (auc.table$TP + auc.table$FN)
+auc.table$specificity = auc.table$TN / (auc.table$TN + auc.table$FP) 
+auc.table$FalsePosRate = 1 - auc.table$specificity 
+auc.table$sens_spec = auc.table$sensitivity + auc.table$specificity
+
+auc.best = auc.table [auc.table$sens_spec == max (auc.table$sens_spec),]
+auc.best
+```
+
+This ROC curve has a AUC value of 0.786 which suggests a good fit for our model because it is above 0.5. The optimal cutoff for classification is a fitted probability of 0.865, which has a false positive rate (1-specificity) of 0.24, and a true positive rate (sensitivity) of 0.766.
+
+## Interaction Plot
+```{r}
+categorize = function (x, quantiles=(1:3)/4) {
+  cutoffs = quantile (x, quantiles)
+  n.cutoffs = length (cutoffs)
+  result = rep ("C1", length (x))
+  for (j in 1:n.cutoffs) {
+    result [x > cutoffs [j]] = paste ("C", j+1, sep="")
+  }
+  return (result)
+}
+
+qplot (defscore, predict (sf2), data=nfldata[,], color=categorize (offscore)) +
+  geom_smooth (method="lm")
+
+qplot (timerem, predict (sf2), data=nfldata[,], color=categorize (offscore)) +
+  geom_smooth (method="lm")
+
+```
+
+*
+
+# Conclusion
+DO ALL TOGETHER :)
+
+## Additional Questions
+* Do the weather conditions make a significant impact whether or not a field goal is made or missed?
+* Is the percentages of made field goals different for each quarter?
+

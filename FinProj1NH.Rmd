@@ -1,0 +1,390 @@
+---
+title: "Prj.1"
+author: "Noah Hill"
+date: "2022-10-30"
+output: word_document
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Abstract
+
+A Chinese automobile company Geely Auto aspires to enter the US market
+by setting up their manufacturing unit there and producing cars locally
+to give competition to their US and European counterparts. They have
+contracted an automobile consulting company to understand the factors on
+which the pricing of cars depends. Specifically, they want to understand
+the factors affecting the pricing of cars in the American market, since
+those may be very different from the Chinese market. From this
+information we wanted to explore further and analyzed:
+
+*What car features (ex: horsepower, citympg, highwaympg,
+symbolling(insurance)) are most influential on the price of the car?* Is
+there a correlation between type of car body and horse power?
+
+# Introduction
+
+We gathered this data from Kaggle.com. It has data of 205 different
+individual cars from the US market. The variables are:
+
+-   Symboling (Insurance Risk Rating) (-3=safe, +3=risky)
+-   Car company
+-   Fuel type (gas or diesel)
+-   Aspiration (turbo or std)
+-   Number of Doors
+-   Car Body Type (convertible, hatchback, sedan, or hardtop)
+-   Drive Wheel Type (4wd, rwd, or fwd)
+-   Engine Location (front or rear)
+-   Wheelbase in inches
+-   Length of Car in inches
+-   Width of Car in inches
+-   Height of Car in inches
+-   Weight of Car in pounds
+-   Engine Type (dohc, ohc, ohcv, rotor, I, ohcf, dohcv,)
+-   Number of Cylinders (\# ranges from 2-12)
+-   Engine Size in cubic centimeters
+-   Fuel System (1bbl, 2bbl, 4bbl, idi, mfi, mpfi, spdi, spfi)
+-   Boreratio in mm
+-   Stroke in mm
+-   Compression Ratio in mm\^3
+-   Horsepower
+-   Peak RPM in thousands
+-   City Miles per Gallon
+-   Highway Miles per Gallon
+-   Price of Car in dollars
+
+Note that this data set is for learning purposes only, we cannot draw
+any inference with real world scenarios. The response variable is the
+price of the car. We are interested in determining which variables can
+best predict the price of the car.
+
+# Exploratory Analysis
+
+## Check distributions of the predictor variables
+
+```{r fig.height=7, fig.width = 8}
+library(ggplot2)
+library(tidyr)
+ggplot(gather(CarPrice_Assignment [, c("price", "horsepower", "citympg", "highwaympg", "symboling")]), aes(value)) +
+  geom_histogram(bins=10) + 
+  facet_wrap(~key, scales = 'free_x')
+```
+
+The histogram of horsepower is right skewed. All other predictors have
+reasonable distributions. We will consider a log transformation for
+horsepower.
+
+## Log Transformation for Horsepower variable
+
+```{r}
+sp = ggplot(gather(CarPrice_Assignment [, c("horsepower")]), aes(value)) +
+  geom_histogram(bins=10) + 
+  facet_wrap(~key, scales = 'free_x')
+sp + scale_x_continuous(trans='log2') +
+  scale_y_continuous(trans='log2')
+```
+
+After performing this transformation, it allowed us to remove skewness
+and analyze it with a more normal distribution.
+
+## Pairwise Correlations
+
+```{r fig.height=9, fig.width = 9}
+plot(CarPrice_Assignment [, c(10:14, 17, 19:26)])
+fit2 = lm (price ~ log(horsepower, 10), data = CarPrice_Assignment)
+summary(fit2)
+```
+
+Price is the most correlated with horsepower, city miles per gallon, and
+highway miles per gallon. The correlation between price and horsepower
+is 0.6196.
+
+Our categorical predictor variables are symboling and carbody.
+
+# Model 1
+
+## First-order model with all predictors
+
+```{r}
+fit1 = lm (price ~ horsepower + citympg + highwaympg + carbody + symboling, data = CarPrice_Assignment)
+x <- (data = CarPrice_Assignment [, c("price", "horsepower", "citympg", "highwaympg", "symboling")])
+pair_data <- data.frame(x)
+pairs(pair_data)
+summary(fit1)
+```
+
+```{r}
+library(corrplot)
+cormat = cor (CarPrice_Assignment [, c(10:14, 17, 19:26)])
+corrplot (cormat)
+```
+
+-   Using all predictor variables, the model explains 73.62% of the
+    variation in price (adjusted 𝑅2).\
+-   The residual standard error is \$4,186 (price).\
+-   The most significant predictors are horsepower and
+    carbodyhatchback.\
+-   The predictor variables highwaympg and citympg show the highest
+    correlation with each other. This is shown in the corr plot, the
+    color is the darkest when comparing highwaympg and citympg.
+
+## Residual Analysis - First-order model
+
+```{r fig.width=7.5, fig.height=4}
+par (mfrow=c(1,2))
+plot(fit1)
+```
+
+-   There is curvature in the residuals.\
+-   There is more constant residual variance in-between the fitted
+    values when x = 15000 and x = 25000.
+-   There is non-constant variance in the overall plot.
+-   The Normal Q-Q plot shows more points above the line on the right
+    side which means the residuals are not normally distributed. It has
+    a longer tail on the right side.
+
+## Box Cox Analysis
+
+```{r}
+library(MASS)
+boxcox(fit1)
+```
+
+The Box-Cox analysis indicates that optimal transformation would have a
+power below zero. Since zero is close to the 95% confidence interval for
+𝜆, we will use a log transformation.
+
+# Stepwise Regression - First Order Model
+
+## AIC
+
+```{r}
+step.all= step (fit1, direction="both")
+summary (fit1)
+```
+
+The AIC regression didn't remove any predictor variables from the model.
+The adjusted R\^2 value is 72.54% which suggests a high correlation for
+our model without the removal of any predictors.
+
+# Centering and Interaction Effects - Second Order Model
+
+## a)
+
+```{r}
+#centering
+mycenter = function (x) x - mean(x)
+
+CarPrice_Assignment$horsepower.c = mycenter (CarPrice_Assignment$horsepower)
+
+CarPrice_Assignment$citympg.c = mycenter (CarPrice_Assignment$citympg)
+
+CarPrice_Assignment$highwaympg.c = mycenter (CarPrice_Assignment$highwaympg)
+
+CarPrice_Assignment$highwarmpg.c = mycenter (CarPrice_Assignment$highwaympg)
+
+#interaction effects
+fit7 = lm (log(price) ~ (horsepower.c + citympg.c + highwaympg.c + carbody + symboling)^2, data = CarPrice_Assignment)
+summary(fit7)
+```
+
+Through the interaction model and by centering, we concluded that the
+most significant highly correlated varaibles are:
+*citympg.c:highwaympg.c* citympg.c:symboling \*highwaympg.c:symboling
+
+# Stepwise Regression - Second Order Model
+
+## AIC
+
+```{r}
+step.all= step (fit7, direction="both")
+summary (fit7)
+```
+
+Through the stepwise regression of AIC after centering the interaction
+effects we found there to be the same three significant interactions
+between the predictor variables. These include:\
+*citympg:highwaympg* citympg:symboling \*highwaympg:symboling
+
+The residual standard error is 0.214 with an adjusted R\^2 value of
+0.8196.
+
+# Final Model
+
+## Residual Diagnostics
+
+```{r}
+plot(fit7)
+```
+
+Looking at the four residual plots there do not seem to be major
+concerns. *Residuals vs fitted values plot: shows linearity and constant
+variance conditions.* Normal QQ plot: values fall close to the line,
+showing the residuals have a normal distribution. *Square root of
+absolute standardized residuals vs fitted values: Shows there to be some
+potential outliers (67,193,69) that we will analyze further. ASK ABOUT
+THIS! something with +-3* Standardized residuals vs Leverage, with
+Cook's distance: Cook's distance show no outliers to be greater than
+0.5.
+
+## Box Plot of Residuals
+
+```{r}
+boxplot(resid(fit7))
+```
+
+The box plot of the residuals show one major outlier with a high
+standardized residual. WHAT ELSE DO I ADD?
+
+## Plot of Response Variables vs. Fitted Values
+
+```{r}
+plot (log(price) ~ fit7$fitted.values, data=CarPrice_Assignment)
+abline(0,1)
+```
+
+## Variance Inflation Factors
+
+```{r}
+library(car)
+vif(fit7)
+```
+
+There are 5 VIF values that are less than 5, which is not great for the
+number of variables and interactions it was analyzing. This shows a poor
+collinearity assessment. We also found it strange that there were a
+large numbers that could have been removed by AIC, so we notice this,
+and may not conclude practicality from our results.
+
+### High Leverage cutoff for fourth residual plot
+
+```{r}
+CarPrice_Assignment$leverage = hatvalues (fit7)
+
+(lev.cut = 3 * fit7$rank / (fit7$rank + fit7$df.residual))
+
+#plot (CarPrice_Assignment [, 2, 22, 24:26], pch=ifelse (CarPrice_Assignment$leverage > lev.cut, 2, 1))
+
+```
+
+The leverage cutoff is 0.4536585.
+
+## Cook's Distance
+
+```{r}
+plot(fit7,which=5)
+abline(v=lev.cut)
+```
+
+```{r}
+summary(cooks.distance(fit7))
+```
+
+There are 5 rows (2.5% of the sample size) with leverage values above
+the cutoff. We expect about 5%, so we have less outliers than a typical
+data set. There are also no Cook's distance values above the cutoff of
+0.5.
+
+## Scatterplot Matrix
+
+```{r}
+plot(CarPrice_Assignment[,c("horsepower","citympg","highwaympg","carbody","symboling","price")],
+     col=ifelse(hatvalues(fit7)>lev.cut,2,1))
+
+table(CarPrice_Assignment$carbody)
+```
+
+The scatter plot matrix above shows the high leverage values as red
+points that appear around the edges of the two-dimensional scatter
+plots. We recognize that middle categories of symboling have high
+leverage. We also see that car body has high leverage values around the
+car body values of 1 and 2. We determined that R assigned labels to the
+following: *1=convertible* 2=hardtop *3=hatchback* 4=sedan \*5=wagon
+Based on this knowledge, we see that convertibles and hardtop cars have
+the highest leverage values because there are fewer of these types of
+cars in our data set.
+
+## Interaction plots of the three most significant values
+
+### citympg:highwaympg
+
+```{r}
+library(ggplot2)
+library(dplyr)
+library(ggpubr)
+categorize = function (x) {
+  quartiles = summary (x) [c(2, 3, 5)]
+  result = rep ("Q1", length (x))
+  result [(quartiles[1] < x) & (x <= quartiles [2])] = "Q2"
+  result [(quartiles[2] < x) & (x <= quartiles [3])] = "Q3"
+  result [quartiles[3] < x] = "Q4"
+  return (result)
+}
+ggplot(data = CarPrice_Assignment, aes(x = citympg, y = log(price), 
+                                       col = categorize(highwaympg))) +
+  geom_point() +
+  geom_smooth(method=lm)
+```
+
+The first interaction plot between city mpg and highway mpg shows the
+most interesting results. To understand this graph, we analyzed that R
+categorized highway mpg into four categories: *Q1=lowest 25% of highway
+mpg values* Q2=25% to median of highway mpg values *Q3=median to 75% of
+highway mpg values* Q4=highest 25% of highway mpg values With this
+information we can conclude that the relationship between log(price) and
+city mpg is stronger(steeper) for cars with low highway mpg values.
+
+### citympg:symboling
+
+```{r}
+library(ggplot2)
+library(dplyr)
+library(ggpubr)
+
+ggplot(data = CarPrice_Assignment, aes(x = citympg, y = log(price), col = as.factor(symboling))) +
+  geom_point() +
+  geom_smooth(method=lm)
+```
+
+The interaction plot between city mpg and symboling has less
+statistically significant meaning because the slopes for the categories
+of symboling (-2 to 3) and city mpg are all very close to similar.
+
+### highwaympg:symboling
+
+```{r}
+library(ggplot2)
+library(dplyr)
+library(ggpubr)
+
+ggplot(data = CarPrice_Assignment, aes(x = highwaympg, y = log(price), col = as.factor(symboling))) +
+  geom_point() +
+  geom_smooth(method=lm)
+```
+
+The interaction plot between highway mpg and symboling has less
+statistically significant meaning because the slopes for the categories
+of symboling (-2 to 3) and highway mpg are all very close to similar.
+
+# Conclusion
+
+The final model has an adjusted R\^2 = 0.8196, which means that 81.96%
+of the variation in log sales price is explained by the model. The
+residual standard error is 0.214 log dollars. Shown by our residual
+analysis, this final model is consistent with the conditions for doing
+linear regression.
+
+Our most meaningful interaction effect was the relationship between city
+mpg and highway mpg. The relationship between log(price) and city mpg is
+stronger(steeper) for cars with low highway mpg values. DOES THIS MAKE
+SENSE OR SHOULD BE IT HIGH HIGHWAY MPG VALUES?
+
+MAKE EXAMPLE PREDICTIONS
+
+ANSWER: Does your analysis raise any questions that can't be answered
+from the current data set? If so, what are they?
